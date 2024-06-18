@@ -4,10 +4,11 @@ import json
 pd.set_option('display.max_columns', None)
 pd.set_option('display.max_rows', None)
 
+
+########################## Preprocessing data for right form ##########################
 # Read json as dict
 with open('output_clean_date_technical.json', 'r') as file:
     json_file = json.loads(file.read())
-
 
 # Combine 5 dataframe into 1
 # -------------------------------
@@ -84,26 +85,51 @@ df_merged_price = df_merged_price.sort_values(by='date_price')
 df_merged_info = df_merged_info.sort_values(by='Start_Date')
 
 ## Merge 2 dataframe based on date
-answer = pd.merge_asof(df_merged_price, df_merged_info, left_on='date_price', right_on='Start_Date')
+df_answer = pd.merge_asof(df_merged_price, df_merged_info, left_on='date_price', right_on='Start_Date')
 
 
 # -- Eliminate date not in correct place -- #
 ## Create a mask for rows where date_price is outside the start and end dates
-mask = (answer['date_price'] < answer['Start_Date']) | (answer['date_price'] > answer['End_Date'])
+mask = (df_answer['date_price'] < df_answer['Start_Date']) | (df_answer['date_price'] > df_answer['End_Date'])
 
 ## Fill the specified columns with NaN where the mask is True
-answer.loc[mask, df_merged_info.columns] = pd.NA
+df_answer.loc[mask, df_merged_info.columns] = pd.NA
 
 
 # -- Fix missing data from df_merged_info_dataframe -- #
 ## Find which row is not added in dataframe_df_merged_info
-elements_not_been_added = set(df_merged_info['Start_Date'].to_list()) - set(answer['Start_Date'].to_list())
+elements_not_been_added = set(df_merged_info['Start_Date'].to_list()) - set(df_answer['Start_Date'].to_list())
 rows_not_been_added = df_merged_info[df_merged_info['Start_Date'].isin(elements_not_been_added)]
 
 ## Concat rows_not_been_added into dataframe
-answer = pd.concat([answer, rows_not_been_added],axis=0)
+df_answer = pd.concat([df_answer, rows_not_been_added],axis=0)
 
+## Delete redundant columns
+df_answer = df_answer.drop(['Start_Date', 'End_Date'], axis=1)
 
 # ----------------------------------
 # Store to csv
-answer.to_csv('revised_output_clean_date_technical.csv', sep=',', index=False)
+df_answer.to_csv('data_to_csv.csv', sep=',', index=False)
+
+
+
+
+########################## Preprocessing data for model ##########################
+from sklearn.preprocessing import MinMaxScaler
+df_preprocessed = df_answer.copy()
+
+# Drop can't minmax scalar columns
+df_preprocessed = df_preprocessed.drop(['symbol','symbol_x','date_price'], axis=1)
+
+# Get columns for minmax scalar
+df_preprocessed = df_preprocessed[df_preprocessed.describe().columns]
+
+# MinMaxscalar
+min_max = MinMaxScaler()
+df_preprocessed = pd.DataFrame(min_max.fit_transform(df_preprocessed), columns=df_preprocessed.keys())
+
+# Drop rows contains Nan
+df_preprocessed.dropna()
+
+# Store to csv
+df_preprocessed.to_csv('data_to_csv_preprocessed.csv', sep=',', index=False)
